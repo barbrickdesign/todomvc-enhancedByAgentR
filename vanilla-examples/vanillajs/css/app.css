@@ -1,0 +1,128 @@
+/* New-todo row: priority selector + input + due date */
+#new-todo-row {
+	display: flex;
+	align-items: center;
+	position: relative;
+}
+
+#new-todo-priority {
+	position: absolute;
+	left: 10px;
+	z-index: 3;
+	font-size: 13px;
+	border: 1px solid #ccc;
+	border-radius: 3px;
+	background: #fff;
+	color: #4d4d4d;
+	padding: 2px 4px;
+	width: 72px;
+	cursor: pointer;
+}
+
+#new-todo {
+	flex: 1;
+	padding-left: 90px !important;
+}
+
+#new-todo-due {
+	position: absolute;
+	right: 6px;
+	z-index: 3;
+	font-size: 12px;
+	border: 1px solid #ccc;
+	border-radius: 3px;
+	background: rgba(255,255,255,0.9);
+	color: #4d4d4d;
+	padding: 2px 4px;
+	cursor: pointer;
+}
+
+/* Priority badge */
+.priority-badge {
+	display: inline-block;
+	width: 20px;
+	height: 20px;
+	line-height: 20px;
+	border-radius: 50%;
+	font-size: 11px;
+	font-weight: bold;
+	text-align: center;
+	color: #fff;
+	position: absolute;
+	left: 45px;
+	top: 50%;
+	transform: translateY(-50%);
+	z-index: 1;
+	cursor: default;
+}
+
+.priority-high {
+	background: #e05252;
+}
+
+.priority-medium {
+	background: #f0a500;
+}
+
+.priority-low {
+	background: #4caf50;
+}
+
+/* Adjust label to make room for priority badge */
+#todo-list li label {
+	margin-left: 70px;
+}
+
+/* Due date display */
+.due-date {
+	display: inline-block;
+	margin-left: 8px;
+	font-size: 11px;
+	color: #aaa;
+	background: #f5f5f5;
+	border-radius: 3px;
+	padding: 1px 5px;
+	vertical-align: middle;
+}
+
+.due-date.overdue {
+	color: #fff;
+	background: #e05252;
+}
+
+/* Completed todo's due date */
+#todo-list li.completed .due-date {
+	color: #ccc;
+	background: #f5f5f5;
+}
+
+/* Footer filters */
+#footer {
+	height: 40px;
+	padding: 10px 15px;
+	position: relative;
+	bottom: auto;
+}
+
+#filters {
+	position: static;
+	display: inline-block;
+	margin: 0 auto;
+	padding: 0;
+}
+
+#filters li a {
+	border: 1px solid transparent;
+	border-radius: 3px;
+	padding: 2px 6px;
+}
+
+#filters li a.selected,
+#filters li a:hover {
+	border-color: rgba(175, 47, 47, 0.2);
+}
+
+#clear-completed {
+	display: none;
+	float: right;
+}
