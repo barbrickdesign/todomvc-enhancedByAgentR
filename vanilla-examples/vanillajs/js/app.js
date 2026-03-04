@@ -3,14 +3,17 @@
 
 	var todos = [],
 		stat = {},
+		currentFilter = 'all',
 		ENTER_KEY = 13;
 
 	window.addEventListener( 'load', windowLoadHandler, false );
 
-	function Todo( title, completed ) {
+	function Todo( title, completed, priority, dueDate ) {
 		this.id = getUuid();
 		this.title = title;
 		this.completed = completed;
+		this.priority = priority || 'medium';
+		this.dueDate = dueDate || '';
 	}
 
 	function Stat() {
@@ -21,13 +24,32 @@
 
 	function windowLoadHandler() {
 		loadTodos();
+		readFilterFromHash();
 		refreshData();
 		addEventListeners();
+	}
+
+	function readFilterFromHash() {
+		var hash = window.location.hash;
+		if ( hash === '#/active' ) {
+			currentFilter = 'active';
+		} else if ( hash === '#/completed' ) {
+			currentFilter = 'completed';
+		} else {
+			currentFilter = 'all';
+		}
 	}
 
 	function addEventListeners() {
 		document.getElementById('new-todo').addEventListener( 'keypress', newTodoKeyPressHandler, false );
 		document.getElementById('toggle-all').addEventListener( 'change', toggleAllChangeHandler, false );
+		document.getElementById('clear-completed').addEventListener( 'click', hrefClearClickHandler, false );
+		window.addEventListener( 'hashchange', hashChangeHandler, false );
+	}
+
+	function hashChangeHandler() {
+		readFilterFromHash();
+		refreshData();
 	}
 
 	function inputEditTodoKeyPressHandler( event ) {
@@ -47,14 +69,22 @@
 
 	function inputEditTodoBlurHandler( event ) {
 		var inputEditTodo = event.target,
+			trimmedText = inputEditTodo.value.trim(),
 			todoId = event.target.id.slice( 6 );
 
-		editTodo( todoId, inputEditTodo.value );
+		if ( trimmedText ) {
+			editTodo( todoId, trimmedText );
+		} else {
+			removeTodoById( todoId );
+			refreshData();
+		}
 	}
 
 	function newTodoKeyPressHandler( event ) {
 		if ( event.keyCode === ENTER_KEY ) {
-			addTodo( document.getElementById('new-todo').value );
+			var priority = document.getElementById('new-todo-priority').value;
+			var dueDate = document.getElementById('new-todo-due').value;
+			addTodo( document.getElementById('new-todo').value, priority, dueDate );
 		}
 	}
 
@@ -78,10 +108,10 @@
 
 	function todoContentHandler( event ) {
 		var todoId = event.target.getAttribute('data-todo-id'),
-			div = document.getElementById( 'li_' + todoId ),
+			li = document.getElementById( 'li_' + todoId ),
 			inputEditTodo = document.getElementById( 'input_' + todoId );
 
-		div.className = 'editing';
+		li.className = ( li.className.replace( /\bcompleted\b/, '' ) + ' editing' ).trim();
 		inputEditTodo.focus();
 	}
 
@@ -101,12 +131,14 @@
 		todos = JSON.parse( localStorage.getItem('todos-vanillajs') );
 	}
 
-	function addTodo( text ) {
+	function addTodo( text, priority, dueDate ) {
 		var trimmedText = text.trim();
 
 		if ( trimmedText ) {
-			var todo = new Todo( trimmedText, false );
+			var todo = new Todo( trimmedText, false, priority, dueDate );
 			todos.push( todo );
+			document.getElementById('new-todo-due').value = '';
+			document.getElementById('new-todo-priority').value = 'medium';
 			refreshData();
 		}
 	}
@@ -137,11 +169,10 @@
 		var i = todos.length;
 
 		while ( i-- ) {
-			console.log(i);
 			if ( todos[ i ].completed ) {
 				todos.splice( i, 1 );
 			}
-	   }
+		}
 	}
 
 	function getTodoById( id ) {
@@ -154,12 +185,31 @@
 		}
 	}
 
+	function getFilteredTodos() {
+		if ( currentFilter === 'active' ) {
+			return todos.filter( function( t ) { return !t.completed; } );
+		} else if ( currentFilter === 'completed' ) {
+			return todos.filter( function( t ) { return t.completed; } );
+		}
+		return todos;
+	}
+
+	function isOverdue( dueDate ) {
+		if ( !dueDate ) { return false; }
+		var now = new Date();
+		var todayStr = now.getFullYear() + '-' +
+			String( now.getMonth() + 1 ).padStart( 2, '0' ) + '-' +
+			String( now.getDate() ).padStart( 2, '0' );
+		return dueDate < todayStr;
+	}
+
 	function refreshData() {
 		saveTodos();
 		computeStats();
 		redrawTodosUI();
 		redrawStatsUI();
 		changeToggleAllCheckboxState();
+		updateFilterLinks();
 	}
 
 	function saveTodos() {
@@ -181,10 +231,22 @@
 		stat.todoLeft = stat.totalTodo - stat.todoCompleted;
 	}
 
+	function updateFilterLinks() {
+		var links = document.querySelectorAll('#filters a');
+		for ( var i = 0; i < links.length; i++ ) {
+			links[ i ].className = '';
+		}
+		var map = { 'all': '#/', 'active': '#/active', 'completed': '#/completed' };
+		var activeLink = document.querySelector( '#filters a[href="' + map[ currentFilter ] + '"]' );
+		if ( activeLink ) {
+			activeLink.className = 'selected';
+		}
+	}
 
 	function redrawTodosUI() {
-
-		var todo, checkbox, label, deleteLink, divDisplay, inputEditTodo, li, i, l,
+		var todo, checkbox, label, priorityBadge, dueDateSpan, deleteLink, divDisplay,
+			inputEditTodo, li, i, l,
+			filtered = getFilteredTodos(),
 			ul = document.getElementById('todo-list');
 
 		document.getElementById('main').style.display = todos.length ? 'block' : 'none';
@@ -192,8 +254,8 @@
 		ul.innerHTML = '';
 		document.getElementById('new-todo').value = '';
 
-		for ( i = 0, l = todos.length; i < l; i++ ) {
-			todo = todos[ i ];
+		for ( i = 0, l = filtered.length; i < l; i++ ) {
+			todo = filtered[ i ];
 
 			// create checkbox
 			checkbox = document.createElement('input');
@@ -202,12 +264,25 @@
 			checkbox.type = 'checkbox';
 			checkbox.addEventListener( 'change', checkboxChangeHandler );
 
-			// create div text
+			// create priority badge
+			priorityBadge = document.createElement('span');
+			priorityBadge.className = 'priority-badge priority-' + ( todo.priority || 'medium' );
+			priorityBadge.textContent = ( todo.priority || 'medium' ).charAt(0).toUpperCase();
+			priorityBadge.title = 'Priority: ' + ( todo.priority || 'medium' );
+
+			// create label
 			label = document.createElement('label');
 			label.setAttribute( 'data-todo-id', todo.id );
 			label.appendChild( document.createTextNode( todo.title ) );
 			label.addEventListener( 'dblclick', todoContentHandler );
 
+			// create due date span
+			if ( todo.dueDate ) {
+				dueDateSpan = document.createElement('span');
+				dueDateSpan.className = 'due-date' + ( isOverdue( todo.dueDate ) && !todo.completed ? ' overdue' : '' );
+				dueDateSpan.textContent = todo.dueDate;
+				label.appendChild( dueDateSpan );
+			}
 
 			// create delete button
 			deleteLink = document.createElement('button');
@@ -220,6 +295,7 @@
 			divDisplay.className = 'view';
 			divDisplay.setAttribute( 'data-todo-id', todo.id );
 			divDisplay.appendChild( checkbox );
+			divDisplay.appendChild( priorityBadge );
 			divDisplay.appendChild( label );
 			divDisplay.appendChild( deleteLink );
 
@@ -231,16 +307,14 @@
 			inputEditTodo.addEventListener( 'keypress', inputEditTodoKeyPressHandler );
 			inputEditTodo.addEventListener( 'blur', inputEditTodoBlurHandler );
 
-
 			// create li
 			li = document.createElement('li');
 			li.id = 'li_' + todo.id;
 			li.appendChild( divDisplay );
 			li.appendChild( inputEditTodo );
 
-
 			if ( todo.completed ) {
-				li.className += 'complete';
+				li.className = 'completed';
 				checkbox.checked = true;
 			}
 
@@ -251,49 +325,23 @@
 	function changeToggleAllCheckboxState() {
 		var toggleAll = document.getElementById('toggle-all');
 
-		toggleAll.checked = stat.todoCompleted === todos.length;
+		toggleAll.checked = todos.length > 0 && stat.todoCompleted === todos.length;
 	}
 
 	function redrawStatsUI() {
-		removeChildren( document.getElementsByTagName('footer')[0] );
-		document.getElementById('footer').style.display = todos.length ? 'block' : 'none';
+		var footer = document.getElementById('footer');
+		var todoCount = document.getElementById('todo-count');
+		var clearCompleted = document.getElementById('clear-completed');
 
-		if ( stat.todoCompleted ) {
-			drawTodoClear();
-		}
+		footer.style.display = todos.length ? 'block' : 'none';
 
-		if ( stat.totalTodo ) {
-			drawTodoCount();
-		}
-	}
+		// update todo count
+		var text = ' ' + ( stat.todoLeft === 1 ? 'item' : 'items' ) + ' left';
+		todoCount.innerHTML = '<strong>' + stat.todoLeft + '</strong>' + text;
 
-	function drawTodoCount() {
-		var number = document.createElement('strong'),
-			remaining = document.createElement('span'),
-			text = ' ' + ( stat.todoLeft === 1 ? 'item' : 'items' ) + ' left';
-
-		// create remaining count
-		number.innerHTML = stat.todoLeft;
-
-		remaining.id = 'todo-count';
-		remaining.appendChild( number );
-		remaining.appendChild( document.createTextNode( text ) );
-
-		document.getElementsByTagName('footer')[0].appendChild( remaining );
-	}
-
-	function drawTodoClear() {
-		var buttonClear = document.createElement('button');
-
-		buttonClear.id = 'clear-completed';
-		buttonClear.addEventListener( 'click', hrefClearClickHandler );
-		buttonClear.innerHTML = 'Clear completed (' + stat.todoCompleted + ')';
-
-		document.getElementsByTagName('footer')[0].appendChild( buttonClear );
-	}
-
-	function removeChildren( node ) {
-		node.innerHTML = '';
+		// show/hide clear completed
+		clearCompleted.style.display = stat.todoCompleted ? 'block' : 'none';
+		clearCompleted.innerHTML = 'Clear completed (' + stat.todoCompleted + ')';
 	}
 
 	function getUuid() {
